@@ -22,7 +22,7 @@ function normalizeBucketLabel(labelText: string): Pick<CodexQuotaBucket, 'id' | 
 
 function findResetText(text: string): string | undefined {
   return firstMatch(text, [
-    /((?:resets?|reset)\s+in\s+(?:\d+\s*(?:d|day|days|h|hr|hrs|hour|hours|m|min|mins|minute|minutes)\s*){1,4})/i,
+    /((?:resets?|reset)\s+in\s+(?:\d+\s*(?:days|day|d|hours|hour|hrs|hr|h|minutes|minute|mins|min|m)\s*){1,4})/i,
     /((?:resets?|reset)\s+at\s+[^.。|,;]{2,40})/i,
     /(重置(?:於|在)?\s*[^.。|,;]{2,40})/i,
   ]);

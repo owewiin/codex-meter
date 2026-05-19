@@ -41,6 +41,24 @@ function failure(errorCode: CodexStatus extends infer _ ? 'WORKER_ERROR' : never
   };
 }
 
+function looksLikeLoginRequired(text: string, url?: string): boolean {
+  const normalized = text.replace(/\s+/g, ' ').trim();
+  return /(?:log in|sign in|continue with google|continue with microsoft|登入|登錄|sign up)/i.test(normalized)
+    || /auth|login|signin/i.test(url ?? '');
+}
+
+function loginRequired(text: string, url?: string): CodexStatus {
+  return {
+    ok: false,
+    source: 'chatgpt_web',
+    errorCode: 'LOGIN_REQUIRED',
+    error: 'Login is required before quota text is visible. Use Login / Re-login, complete ChatGPT login, then refresh again.',
+    fetchedAt: new Date().toISOString(),
+    usagePageUrl: url,
+    rawText: text.replace(/\s+/g, ' ').trim().slice(0, 2000),
+  };
+}
+
 async function login(args: Args): Promise<CodexStatus> {
   if (!args.profile) return failure('WORKER_ERROR', 'Missing --profile path', args.url);
   const context = await chromium.launchPersistentContext(args.profile, {
@@ -51,9 +69,11 @@ async function login(args: Args): Promise<CodexStatus> {
   await page.goto(args.url ?? 'https://chatgpt.com/', { waitUntil: 'domcontentloaded', timeout: args.timeoutMs });
   await page.waitForTimeout(5000);
   const text = await page.locator('body').innerText({ timeout: 5000 }).catch(() => '');
+  const currentUrl = page.url();
   await context.close();
   const parsed = parseQuotaText(text, { usagePageUrl: args.url });
   if (parsed.ok) return parsed;
+  if (looksLikeLoginRequired(text, currentUrl)) return loginRequired(text, args.url);
   return {
     ok: false,
     source: 'chatgpt_web',
@@ -75,6 +95,7 @@ async function fetchQuota(args: Args): Promise<CodexStatus> {
     const page = context.pages()[0] ?? await context.newPage();
     await page.goto(args.url ?? 'https://chatgpt.com/', { waitUntil: 'networkidle', timeout: args.timeoutMs });
     const text = await page.locator('body').innerText({ timeout: 10000 });
+    if (looksLikeLoginRequired(text, page.url())) return loginRequired(text, args.url);
     return parseQuotaText(text, { usagePageUrl: args.url });
   } finally {
     await context.close();

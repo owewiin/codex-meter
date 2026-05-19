@@ -75,6 +75,11 @@ describe('notification decisions', () => {
     expect(decision.reasons).toContain('low_quota');
   });
 
+  it('uses the primary bucket percent for low-quota alerts', () => {
+    const decision = shouldNotify(ok(80), bucketed, DEFAULT_CONFIG);
+    expect(decision.reasons).toContain('low_quota');
+  });
+
   it('does not repeatedly notify when already low', () => {
     const decision = shouldNotify(ok(10), ok(9), DEFAULT_CONFIG);
     expect(decision.reasons).not.toContain('low_quota');

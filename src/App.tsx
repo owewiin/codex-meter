@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { DEFAULT_CONFIG, normalizeConfig } from './shared/config';
-import { formatStatusTooltip, humanSummary, quotaColor } from './shared/status';
+import { formatStatusTooltip, humanSummary, quotaColor, shouldNotify } from './shared/status';
 import type { CodexMeterConfig, CodexStatus } from './shared/types';
 
 const mockStatus: CodexStatus = {
@@ -32,6 +32,7 @@ export default function App() {
   const [status, setStatus] = useState<CodexStatus>(mockStatus);
   const [config, setConfig] = useState<CodexMeterConfig>(DEFAULT_CONFIG);
   const [busy, setBusy] = useState(false);
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
   const [message, setMessage] = useState('Browser preview mode：目前顯示 mock status。');
 
   useEffect(() => {
@@ -42,12 +43,22 @@ export default function App() {
   const color = useMemo(() => quotaColor(status, config.lowThresholdPercent), [status, config.lowThresholdPercent]);
   const tooltip = useMemo(() => formatStatusTooltip(status), [status]);
 
-  async function refreshNow() {
+  async function refreshNow(userInitiated = true) {
     setBusy(true);
-    setMessage('Refreshing Codex quota...');
-    const next = await safeInvoke<CodexStatus>('refresh_now', { config }, mockStatus);
+    setMessage(userInitiated ? 'Refreshing Codex quota...' : 'Auto-refreshing Codex quota...');
+    const previous = status;
+    const activeConfig = normalizeConfig(config);
+    const next = await safeInvoke<CodexStatus>('refresh_now', { config: activeConfig }, mockStatus);
     setStatus(next);
-    setMessage(next.ok ? 'Refresh completed.' : `Refresh failed: ${next.error}`);
+
+    const decision = shouldNotify(previous, next, activeConfig, false);
+    let discordSuffix = '';
+    if (activeConfig.discord.enabled && decision.notify) {
+      await safeInvoke('send_status_to_discord', { status: next, config: activeConfig, manual: false }, null);
+      discordSuffix = ` Discord notified: ${decision.reasons.join(', ')}.`;
+    }
+
+    setMessage(next.ok ? `Refresh completed.${discordSuffix}` : `Refresh failed: ${next.error}${discordSuffix}`);
     setBusy(false);
   }
 
@@ -78,6 +89,15 @@ export default function App() {
     setMessage('Discord status send requested.');
   }
 
+  useEffect(() => {
+    if (!autoRefreshEnabled || busy) return undefined;
+    const ms = normalizeConfig(config).refreshIntervalMinutes * 60_000;
+    const timer = window.setInterval(() => {
+      void refreshNow(false);
+    }, ms);
+    return () => window.clearInterval(timer);
+  }, [autoRefreshEnabled, busy, config, status]);
+
   return (
     <main className="shell">
       <section className="hero">
@@ -107,7 +127,7 @@ export default function App() {
         ) : null}
         <pre>{tooltip}</pre>
         <div className="actions">
-          <button disabled={busy} onClick={refreshNow}>Refresh Now</button>
+          <button disabled={busy} onClick={() => void refreshNow(true)}>Refresh Now</button>
           <button disabled={busy} onClick={login}>Login / Re-login</button>
           <button disabled={busy || !config.discord.enabled} onClick={sendDiscord}>Send Status to Discord</button>
         </div>
@@ -130,6 +150,26 @@ export default function App() {
         <label className="checkbox">
           <input type="checkbox" checked={config.discord.enabled} onChange={(event) => setConfig({ ...config, discord: { ...config.discord, enabled: event.target.checked } })} />
           Enable Discord Webhook
+        </label>
+        <label className="checkbox">
+          <input type="checkbox" checked={autoRefreshEnabled} onChange={(event) => setAutoRefreshEnabled(event.target.checked)} />
+          Enable Auto Refresh
+        </label>
+        <label className="checkbox">
+          <input type="checkbox" checked={config.discord.notifyOnLowQuota} onChange={(event) => setConfig({ ...config, discord: { ...config.discord, notifyOnLowQuota: event.target.checked } })} />
+          Discord: Low quota alerts
+        </label>
+        <label className="checkbox">
+          <input type="checkbox" checked={config.discord.notifyOnFetchFailure} onChange={(event) => setConfig({ ...config, discord: { ...config.discord, notifyOnFetchFailure: event.target.checked } })} />
+          Discord: Fetch failure alerts
+        </label>
+        <label className="checkbox">
+          <input type="checkbox" checked={config.discord.notifyOnRecovery} onChange={(event) => setConfig({ ...config, discord: { ...config.discord, notifyOnRecovery: event.target.checked } })} />
+          Discord: Recovery alerts
+        </label>
+        <label className="checkbox">
+          <input type="checkbox" checked={config.discord.notifyEveryRefresh} onChange={(event) => setConfig({ ...config, discord: { ...config.discord, notifyEveryRefresh: event.target.checked } })} />
+          Discord: Notify every refresh
         </label>
         <label className="wide">
           Discord Webhook URL

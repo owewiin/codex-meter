@@ -71,4 +71,17 @@ describe('parseQuotaText', () => {
       expect(result.buckets?.map((bucket) => bucket.id)).toEqual(['five_hour', 'weekly']);
     }
   });
+
+  it('parses compact bucket labels and reset wording variants', () => {
+    const result = parseQuotaText('Usage 5h: 12% left reset in 48 minutes. Weekly quota: 91% available resets in 5 days.', { source: 'fixture' });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.buckets).toMatchObject([
+        { id: 'five_hour', label: '5-hour', remainingPercent: 12, resetText: 'reset in 48 minutes' },
+        { id: 'weekly', label: 'weekly', remainingPercent: 91, resetText: 'resets in 5 days' },
+      ]);
+      expect(result.remainingPercent).toBe(12);
+    }
+  });
 });

@@ -12,6 +12,12 @@ Install Playwright browser binaries when ready to test real login/fetch:
 npx playwright install chromium
 ```
 
+On Ubuntu/WSL, Playwright also needs system browser libraries. If Chromium fails with missing `.so` files such as `libnspr4.so`, install deps:
+
+```bash
+npx playwright install-deps chromium
+```
+
 ## Verify non-native pieces
 
 ```bash
@@ -54,8 +60,15 @@ When both 5-hour and weekly buckets are visible, the top-level `remainingPercent
 Tauri native run requires Rust/Cargo and platform prerequisites.
 
 ```bash
+. "$HOME/.cargo/env"
 cargo --version
 npm run tauri:dev
+```
+
+On Ubuntu/WSL, Tauri build dependencies include DBus/WebKitGTK development libraries. At minimum, install the missing package reported by Cargo, for example:
+
+```bash
+sudo apt install libdbus-1-dev pkg-config
 ```
 
 If `cargo: command not found`, install Rust first:
