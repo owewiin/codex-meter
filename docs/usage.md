@@ -66,6 +66,16 @@ cargo --version
 npm run tauri:dev
 ```
 
+On Windows PowerShell:
+
+```powershell
+cd C:\Users\oweewiin\Desktop\codex-quota-tray
+$env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
+npm run tauri:dev
+```
+
+The app creates a Windows system-tray icon. Closing the main window hides it; it keeps running until you select `Quit` from the tray menu. Right-click the tray icon for `Open Codex Meter`, `Hide Window`, `Refresh Now`, `Login / Re-login`, and `Quit`. Hovering the icon shows the latest parsed quota tooltip.
+
 On Ubuntu/WSL, Tauri build dependencies include DBus/WebKitGTK development libraries. At minimum, install the missing package reported by Cargo, for example:
 
 ```bash
@@ -92,6 +102,8 @@ cargo --version
 3. Complete ChatGPT/OpenAI login in the isolated Windows Chrome window.
 4. Click `Refresh Now`; the default usage page is `https://chatgpt.com/codex/settings/usage`.
 5. Check the status panel and `%APPDATA%\CodexMeter\status.json`.
+
+You can also use the tray menu `Refresh Now` without opening the main window. If the window is open, tray refresh results are pushed back into the UI.
 
 ## Discord webhook
 

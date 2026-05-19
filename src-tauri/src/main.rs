@@ -1,6 +1,11 @@
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
-use std::{env, fs, path::PathBuf, process::Command};
+use std::{env, fs, path::PathBuf, process::Command, thread};
+use tauri::{
+    menu::{Menu, MenuItem, PredefinedMenuItem},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    AppHandle, Emitter, Manager, WindowEvent,
+};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -134,6 +139,46 @@ fn get_status() -> Result<CodexStatus, String> {
     serde_json::from_str(&text).map_err(|err| err.to_string())
 }
 
+fn status_tooltip(status: &CodexStatus) -> String {
+    if status.ok {
+        let bucket_summary = status
+            .buckets
+            .clone()
+            .unwrap_or_default()
+            .iter()
+            .map(|bucket| format!("{} {}%", bucket.label, bucket.remaining_percent))
+            .collect::<Vec<_>>()
+            .join(" / ");
+        let quota_text = if bucket_summary.is_empty() {
+            format!(
+                "{}% remaining",
+                status.remaining_percent.unwrap_or_default()
+            )
+        } else {
+            bucket_summary
+        };
+        format!(
+            "Codex Meter\n{}\n最後更新：{}",
+            quota_text, status.fetched_at
+        )
+    } else {
+        format!(
+            "Codex Meter\n查詢失敗：{}\n最後嘗試：{}",
+            status
+                .error_code
+                .clone()
+                .unwrap_or_else(|| "UNKNOWN".to_string()),
+            status.fetched_at
+        )
+    }
+}
+
+fn update_tray_tooltip(app: &AppHandle, status: &CodexStatus) {
+    if let Some(tray) = app.tray_by_id("main") {
+        let _ = tray.set_tooltip(Some(status_tooltip(status)));
+    }
+}
+
 fn write_status(status: &CodexStatus) -> Result<(), String> {
     let dir = app_dir()?;
     let text = serde_json::to_string_pretty(status).map_err(|err| err.to_string())?;
@@ -258,7 +303,7 @@ fn run_worker(mode: &str, config: &CodexMeterConfig) -> Result<CodexStatus, Stri
 }
 
 #[tauri::command]
-fn refresh_now(config: CodexMeterConfig) -> Result<CodexStatus, String> {
+fn refresh_now(app: AppHandle, config: CodexMeterConfig) -> Result<CodexStatus, String> {
     let status = run_worker("fetch", &config).unwrap_or_else(|err| CodexStatus {
         ok: false,
         source: "chatgpt_web".to_string(),
@@ -274,6 +319,7 @@ fn refresh_now(config: CodexMeterConfig) -> Result<CodexStatus, String> {
         raw_text: None,
     });
     write_status(&status)?;
+    update_tray_tooltip(&app, &status);
     Ok(status)
 }
 
@@ -387,9 +433,110 @@ async fn send_status_to_discord(
     Ok(())
 }
 
+fn show_main_window(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
+fn hide_main_window(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.hide();
+    }
+}
+
+fn refresh_from_tray(app: AppHandle) {
+    thread::spawn(move || {
+        let config = get_config().unwrap_or_else(|_| default_config());
+        let status = run_worker("fetch", &config).unwrap_or_else(|err| CodexStatus {
+            ok: false,
+            source: "chatgpt_web".to_string(),
+            remaining_text: None,
+            remaining_percent: None,
+            reset_text: None,
+            plan_text: None,
+            buckets: None,
+            error_code: Some("WORKER_ERROR".to_string()),
+            error: Some(err),
+            fetched_at: Utc::now().to_rfc3339(),
+            usage_page_url: Some(config.usage_page_url.clone()),
+            raw_text: None,
+        });
+        let _ = write_status(&status);
+        update_tray_tooltip(&app, &status);
+        let _ = app.emit("codex-status-updated", status);
+    });
+}
+
+fn login_from_tray(_app: &AppHandle) {
+    let config = get_config().unwrap_or_else(|_| default_config());
+    let _ = open_manual_chrome(&config.usage_page_url);
+}
+
+fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    let show = MenuItem::with_id(app, "show", "Open Codex Meter", true, None::<&str>)?;
+    let hide = MenuItem::with_id(app, "hide", "Hide Window", true, None::<&str>)?;
+    let refresh = MenuItem::with_id(app, "refresh", "Refresh Now", true, None::<&str>)?;
+    let login = MenuItem::with_id(app, "login", "Login / Re-login", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+    let menu = Menu::with_items(
+        app,
+        &[
+            &show,
+            &hide,
+            &PredefinedMenuItem::separator(app)?,
+            &refresh,
+            &login,
+            &PredefinedMenuItem::separator(app)?,
+            &quit,
+        ],
+    )?;
+    let tooltip = get_status()
+        .map(|status| status_tooltip(&status))
+        .unwrap_or_else(|_| "Codex Meter\n尚未抓取額度".to_string());
+    let mut builder = TrayIconBuilder::with_id("main")
+        .menu(&menu)
+        .tooltip(tooltip)
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            "show" => show_main_window(app),
+            "hide" => hide_main_window(app),
+            "refresh" => refresh_from_tray(app.clone()),
+            "login" => login_from_tray(app),
+            "quit" => app.exit(0),
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                show_main_window(tray.app_handle());
+            }
+        });
+    if let Some(icon) = app.default_window_icon().cloned() {
+        builder = builder.icon(icon);
+    }
+    builder.build(app)?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .setup(|app| {
+            setup_tray(app)?;
+            Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.hide();
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             get_config,
             save_config,

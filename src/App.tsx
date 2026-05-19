@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { DEFAULT_CONFIG, normalizeConfig } from './shared/config';
 import { formatStatusTooltip, humanSummary, quotaColor, shouldNotify } from './shared/status';
 import type { CodexMeterConfig, CodexStatus } from './shared/types';
@@ -38,6 +39,17 @@ export default function App() {
   useEffect(() => {
     void safeInvoke<CodexStatus>('get_status', undefined, mockStatus).then(setStatus);
     void safeInvoke<CodexMeterConfig>('get_config', undefined, DEFAULT_CONFIG).then((value) => setConfig(normalizeConfig(value)));
+  }, []);
+
+  useEffect(() => {
+    let unsubscribe: (() => void) | undefined;
+    void listen<CodexStatus>('codex-status-updated', (event) => {
+      setStatus(event.payload);
+      setMessage(event.payload.ok ? 'Tray refresh completed.' : `Tray refresh failed: ${event.payload.error}`);
+    }).then((fn) => {
+      unsubscribe = fn;
+    });
+    return () => unsubscribe?.();
   }, []);
 
   const color = useMemo(() => quotaColor(status, config.lowThresholdPercent), [status, config.lowThresholdPercent]);

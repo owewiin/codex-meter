@@ -11,6 +11,7 @@ Implemented:
 - Node + Playwright worker with fixture, login, and fetch modes against the Codex usage page.
 - Separate 5-hour and weekly quota bucket parsing when the usage page exposes both labels.
 - Local-cache-oriented Tauri backend shell.
+- Windows system tray icon with open/hide, refresh, login/re-login, tooltip status, and quit menu actions.
 - Discord webhook send command in backend shell.
 
 Important limitation in the current WSL environment:
@@ -39,6 +40,16 @@ After installing Rust/Cargo and Tauri prerequisites on Windows or WSL:
 npm run tauri:dev
 npm run tauri:build
 ```
+
+On Windows PowerShell, run from the project directory:
+
+```powershell
+cd C:\Users\oweewiin\Desktop\codex-quota-tray
+$env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
+npm run tauri:dev
+```
+
+The app now stays resident in the Windows system tray. Closing the main window hides it instead of quitting. Use the tray menu to `Open Codex Meter`, `Hide Window`, `Refresh Now`, `Login / Re-login`, or `Quit`.
 
 On Ubuntu/WSL, native Tauri + Playwright prerequisites typically include:
 
