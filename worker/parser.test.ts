@@ -84,4 +84,21 @@ describe('parseQuotaText', () => {
       expect(result.remainingPercent).toBe(12);
     }
   });
+
+  it('parses Traditional Chinese Codex usage page bucket labels', () => {
+    const result = parseQuotaText(
+      'Codex 使用量會計入你的共用代理式使用上限 5 小時使用情況限制 87% 剩餘 重設時間 2026年5月20日 上午12:29 每週使用情況限制 73% 剩餘 重設時間 2026年5月24日 上午8:15',
+      { source: 'fixture' },
+    );
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.buckets).toMatchObject([
+        { id: 'five_hour', label: '5-hour', remainingPercent: 87, resetText: '重設時間 2026年5月20日 上午12:29' },
+        { id: 'weekly', label: 'weekly', remainingPercent: 73, resetText: '重設時間 2026年5月24日 上午8:15' },
+      ]);
+      expect(result.remainingPercent).toBe(73);
+      expect(result.resetText).toBe('重設時間 2026年5月24日 上午8:15');
+    }
+  });
 });

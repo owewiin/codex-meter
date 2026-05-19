@@ -71,7 +71,7 @@ fn app_dir() -> Result<PathBuf, String> {
 
 fn default_config() -> CodexMeterConfig {
     CodexMeterConfig {
-        usage_page_url: "https://chatgpt.com/".to_string(),
+        usage_page_url: "https://chatgpt.com/codex/settings/usage".to_string(),
         refresh_interval_minutes: 15,
         low_threshold_percent: 20,
         discord: DiscordConfig {
@@ -102,7 +102,7 @@ fn default_status() -> CodexStatus {
         error_code: Some("LOGIN_REQUIRED".to_string()),
         error: Some("No cached status yet. Use Login / Re-login, then Refresh Now.".to_string()),
         fetched_at: Utc::now().to_rfc3339(),
-        usage_page_url: Some("https://chatgpt.com/".to_string()),
+        usage_page_url: Some("https://chatgpt.com/codex/settings/usage".to_string()),
         raw_text: None,
     }
 }
@@ -144,7 +144,11 @@ fn write_status(status: &CodexStatus) -> Result<(), String> {
         .open(dir.join("history.jsonl"))
         .and_then(|mut file| {
             use std::io::Write;
-            writeln!(file, "{}", serde_json::to_string(status).unwrap_or_default())
+            writeln!(
+                file,
+                "{}",
+                serde_json::to_string(status).unwrap_or_default()
+            )
         })
         .map_err(|err| err.to_string())?;
     Ok(())
@@ -158,21 +162,90 @@ fn repo_root_from_tauri() -> Result<PathBuf, String> {
         .ok_or_else(|| "Cannot resolve project root".to_string())
 }
 
-fn run_worker(mode: &str, config: &CodexMeterConfig) -> Result<CodexStatus, String> {
-    let dir = app_dir()?;
-    let profile = dir.join("playwright-profile");
-    let root = repo_root_from_tauri()?;
-    let output = Command::new("npx")
-        .current_dir(root)
+const CHROME_DEBUG_PORT: u16 = 9223;
+
+fn manual_chrome_profile() -> Result<PathBuf, String> {
+    env::var_os("USERPROFILE")
+        .map(PathBuf::from)
+        .map(|home| {
+            home.join("Desktop")
+                .join("codex-meter-manual-chrome-profile")
+        })
+        .ok_or_else(|| "Cannot resolve USERPROFILE for manual Chrome profile".to_string())
+}
+
+fn chrome_executable() -> PathBuf {
+    let candidates = [
+        env::var_os("PROGRAMFILES").map(PathBuf::from).map(|p| {
+            p.join("Google")
+                .join("Chrome")
+                .join("Application")
+                .join("chrome.exe")
+        }),
+        env::var_os("PROGRAMFILES(X86)")
+            .map(PathBuf::from)
+            .map(|p| {
+                p.join("Google")
+                    .join("Chrome")
+                    .join("Application")
+                    .join("chrome.exe")
+            }),
+        env::var_os("LOCALAPPDATA").map(PathBuf::from).map(|p| {
+            p.join("Google")
+                .join("Chrome")
+                .join("Application")
+                .join("chrome.exe")
+        }),
+    ];
+
+    candidates
+        .into_iter()
+        .flatten()
+        .find(|path| path.exists())
+        .unwrap_or_else(|| PathBuf::from("chrome.exe"))
+}
+
+fn npx_executable() -> &'static str {
+    if cfg!(windows) {
+        "npx.cmd"
+    } else {
+        "npx"
+    }
+}
+
+fn open_manual_chrome(url: &str) -> Result<(), String> {
+    let profile = manual_chrome_profile()?;
+    fs::create_dir_all(&profile).map_err(|err| err.to_string())?;
+    Command::new(chrome_executable())
         .args([
-            "tsx",
-            "worker/fetch-codex-quota.ts",
-            mode,
-            "--profile",
-            profile.to_string_lossy().as_ref(),
-            "--url",
-            config.usage_page_url.as_str(),
+            format!("--user-data-dir={}", profile.to_string_lossy()),
+            format!("--remote-debugging-port={CHROME_DEBUG_PORT}"),
+            "--new-window".to_string(),
+            url.to_string(),
         ])
+        .spawn()
+        .map_err(|err| format!("Failed to open Chrome login window: {err}"))?;
+    Ok(())
+}
+
+fn run_worker(mode: &str, config: &CodexMeterConfig) -> Result<CodexStatus, String> {
+    let profile = manual_chrome_profile()?;
+    fs::create_dir_all(&profile).map_err(|err| err.to_string())?;
+    let root = repo_root_from_tauri()?;
+    let cdp_url = format!("http://127.0.0.1:{CHROME_DEBUG_PORT}");
+    let output = Command::new(npx_executable())
+        .current_dir(root)
+        .arg("tsx")
+        .arg("worker/fetch-codex-quota.ts")
+        .arg(mode)
+        .arg("--profile")
+        .arg(profile.to_string_lossy().as_ref())
+        .arg("--url")
+        .arg(config.usage_page_url.as_str())
+        .arg("--browser-channel")
+        .arg("chrome")
+        .arg("--cdp-url")
+        .arg(cdp_url)
         .output()
         .map_err(|err| format!("Failed to launch worker: {err}"))?;
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -180,7 +253,8 @@ fn run_worker(mode: &str, config: &CodexMeterConfig) -> Result<CodexStatus, Stri
     if stdout.trim().is_empty() {
         return Err(format!("Worker produced no JSON. stderr={stderr}"));
     }
-    serde_json::from_str(stdout.trim()).map_err(|err| format!("Worker JSON parse failed: {err}; stdout={stdout}; stderr={stderr}"))
+    serde_json::from_str(stdout.trim())
+        .map_err(|err| format!("Worker JSON parse failed: {err}; stdout={stdout}; stderr={stderr}"))
 }
 
 #[tauri::command]
@@ -205,26 +279,49 @@ fn refresh_now(config: CodexMeterConfig) -> Result<CodexStatus, String> {
 
 #[tauri::command]
 fn login(config: CodexMeterConfig) -> Result<CodexStatus, String> {
-    let status = run_worker("login", &config).unwrap_or_else(|err| CodexStatus {
-        ok: false,
-        source: "chatgpt_web".to_string(),
-        remaining_text: None,
-        remaining_percent: None,
-        reset_text: None,
-        plan_text: None,
-        buckets: None,
-        error_code: Some("WORKER_ERROR".to_string()),
-        error: Some(err),
-        fetched_at: Utc::now().to_rfc3339(),
-        usage_page_url: Some(config.usage_page_url.clone()),
-        raw_text: None,
-    });
+    let status = match open_manual_chrome(&config.usage_page_url) {
+        Ok(()) => CodexStatus {
+            ok: false,
+            source: "chatgpt_web".to_string(),
+            remaining_text: None,
+            remaining_percent: None,
+            reset_text: None,
+            plan_text: None,
+            buckets: None,
+            error_code: Some("LOGIN_REQUIRED".to_string()),
+            error: Some(
+                "Chrome login window opened. Finish ChatGPT login there, then click Refresh Now."
+                    .to_string(),
+            ),
+            fetched_at: Utc::now().to_rfc3339(),
+            usage_page_url: Some(config.usage_page_url.clone()),
+            raw_text: None,
+        },
+        Err(err) => CodexStatus {
+            ok: false,
+            source: "chatgpt_web".to_string(),
+            remaining_text: None,
+            remaining_percent: None,
+            reset_text: None,
+            plan_text: None,
+            buckets: None,
+            error_code: Some("WORKER_ERROR".to_string()),
+            error: Some(err),
+            fetched_at: Utc::now().to_rfc3339(),
+            usage_page_url: Some(config.usage_page_url.clone()),
+            raw_text: None,
+        },
+    };
     write_status(&status)?;
     Ok(status)
 }
 
 #[tauri::command]
-async fn send_status_to_discord(status: CodexStatus, config: CodexMeterConfig, manual: bool) -> Result<(), String> {
+async fn send_status_to_discord(
+    status: CodexStatus,
+    config: CodexMeterConfig,
+    manual: bool,
+) -> Result<(), String> {
     if !manual && !config.discord.enabled {
         return Ok(());
     }
@@ -242,7 +339,10 @@ async fn send_status_to_discord(status: CodexStatus, config: CodexMeterConfig, m
                     "{}：{}%（{}）",
                     bucket.label,
                     bucket.remaining_percent,
-                    bucket.reset_text.clone().unwrap_or_else(|| "未顯示重置時間".to_string())
+                    bucket
+                        .reset_text
+                        .clone()
+                        .unwrap_or_else(|| "未顯示重置時間".to_string())
                 )
             })
             .collect::<Vec<_>>()
@@ -251,12 +351,22 @@ async fn send_status_to_discord(status: CodexStatus, config: CodexMeterConfig, m
             format!(
                 "剩餘：{}%\n重置：{}",
                 status.remaining_percent.unwrap_or(0),
-                status.reset_text.clone().unwrap_or_else(|| "圖中未顯示".to_string())
+                status
+                    .reset_text
+                    .clone()
+                    .unwrap_or_else(|| "圖中未顯示".to_string())
             )
         } else {
-            format!("{}\n主要告警值：{}%", bucket_lines, status.remaining_percent.unwrap_or(0))
+            format!(
+                "{}\n主要告警值：{}%",
+                bucket_lines,
+                status.remaining_percent.unwrap_or(0)
+            )
         };
-        format!("Codex 額度狀態\n\n{}\n最後更新：{}", detail, status.fetched_at)
+        format!(
+            "Codex 額度狀態\n\n{}\n最後更新：{}",
+            detail, status.fetched_at
+        )
     } else {
         format!(
             "Codex 額度查詢失敗\n\n原因：{}\n最後嘗試：{}",

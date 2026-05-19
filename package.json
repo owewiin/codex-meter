@@ -10,6 +10,8 @@
     "worker:fixture": "tsx worker/fetch-codex-quota.ts fixture",
     "worker:login": "tsx worker/fetch-codex-quota.ts login",
     "worker:fetch": "tsx worker/fetch-codex-quota.ts fetch",
+    "worker:fetch:win": "tsx worker/fetch-codex-quota.ts fetch --browser-channel chrome --cdp-url http://127.0.0.1:9223",
+    "worker:login:win": "tsx worker/fetch-codex-quota.ts login --browser-channel chrome",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build"
   },

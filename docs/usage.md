@@ -25,6 +25,7 @@ npm test -- --run
 npm run build
 npm run worker:fixture -- --text "Codex 72% remaining resets in 3h 12m ChatGPT Pro"
 npm run worker:fixture -- --text "Codex 5-hour limit 72% remaining resets in 3h 12m Weekly limit 41% remaining resets in 4d 6h ChatGPT Pro"
+cmd.exe /c "cd /d C:\Users\oweewiin\Desktop\codex-quota-tray && npm run worker:fetch:win"
 ```
 
 Expected fixture output:
@@ -88,8 +89,8 @@ cargo --version
 
 1. Run the app with `npm run tauri:dev`.
 2. Click `Login / Re-login`.
-3. Complete ChatGPT/OpenAI login in the Playwright Chromium window.
-4. Click `Refresh Now`.
+3. Complete ChatGPT/OpenAI login in the isolated Windows Chrome window.
+4. Click `Refresh Now`; the default usage page is `https://chatgpt.com/codex/settings/usage`.
 5. Check the status panel and `%APPDATA%\CodexMeter\status.json`.
 
 ## Discord webhook

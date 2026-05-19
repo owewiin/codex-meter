@@ -15,7 +15,7 @@ function firstMatch(text: string, patterns: RegExp[]): string | undefined {
 }
 
 function normalizeBucketLabel(labelText: string): Pick<CodexQuotaBucket, 'id' | 'label'> {
-  if (/5\s*(?:-|\s)?(?:h|hr|hour)/i.test(labelText)) return { id: 'five_hour', label: '5-hour' };
+  if (/5\s*(?:-|\s)?(?:h|hr|hour|小時)/i.test(labelText)) return { id: 'five_hour', label: '5-hour' };
   if (/week|weekly|一週|每週/i.test(labelText)) return { id: 'weekly', label: 'weekly' };
   return { id: 'unknown', label: labelText.trim() || 'quota' };
 }
@@ -24,12 +24,13 @@ function findResetText(text: string): string | undefined {
   return firstMatch(text, [
     /((?:resets?|reset)\s+in\s+(?:\d+\s*(?:days|day|d|hours|hour|hrs|hr|h|minutes|minute|mins|min|m)\s*){1,4})/i,
     /((?:resets?|reset)\s+at\s+[^.。|,;]{2,40})/i,
-    /(重置(?:於|在)?\s*[^.。|,;]{2,40})/i,
+    /(重[置設]時間\s*\d{4}年\d{1,2}月\d{1,2}日\s*(?:上午|下午)?\d{1,2}:\d{2})/i,
+    /(重[置設](?:時間|於|在)?\s*[^.。|,;]{2,40})/i,
   ]);
 }
 
 function parseQuotaBuckets(normalized: string): CodexQuotaBucket[] {
-  const bucketPattern = /((?:5\s*(?:-|\s)?(?:h|hr|hour)|weekly|week|一週|每週)[^%]{0,80}?)(\d{1,3})\s*%\s*(?:remaining|left|available|剩餘)?/gi;
+  const bucketPattern = /((?:5\s*(?:-|\s)?(?:h|hr|hour|小時)|weekly|week|一週|每週)[^%]{0,80}?)(\d{1,3})\s*%\s*(?:remaining|left|available|剩餘)?/gi;
   const matches: RegExpExecArray[] = [];
   let match: RegExpExecArray | null;
   while ((match = bucketPattern.exec(normalized)) !== null) {

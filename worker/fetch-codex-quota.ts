@@ -9,6 +9,8 @@ interface Args {
   text?: string;
   profile?: string;
   url?: string;
+  browserChannel?: string;
+  cdpUrl?: string;
   timeoutMs: number;
 }
 
@@ -26,10 +28,19 @@ function parseArgs(): Args {
   return {
     mode,
     text: readArg('text', ''),
-    profile: readArg('profile'),
-    url: readArg('url', 'https://chatgpt.com/'),
+    profile: readArg('profile', defaultProfile()),
+    url: readArg('url', 'https://chatgpt.com/codex/settings/usage'),
+    browserChannel: readArg('browser-channel'),
+    cdpUrl: readArg('cdp-url'),
     timeoutMs: Number(readArg('timeout-ms', '60000')),
   };
+}
+
+function defaultProfile(): string | undefined {
+  if (process.platform === 'win32' && process.env.USERPROFILE) {
+    return `${process.env.USERPROFILE}\\Desktop\\codex-meter-manual-chrome-profile`;
+  }
+  return undefined;
 }
 
 function failure(errorCode: CodexStatus extends infer _ ? 'WORKER_ERROR' : never, error: string, url?: string): CodexStatus {
@@ -65,6 +76,7 @@ async function login(args: Args): Promise<CodexStatus> {
   if (!args.profile) return failure('WORKER_ERROR', 'Missing --profile path', args.url);
   const context = await chromium.launchPersistentContext(args.profile, {
     headless: false,
+    channel: args.browserChannel,
     viewport: { width: 1280, height: 900 },
   });
   const page = context.pages()[0] ?? await context.newPage();
@@ -97,8 +109,17 @@ async function login(args: Args): Promise<CodexStatus> {
 
 async function fetchQuota(args: Args): Promise<CodexStatus> {
   if (!args.profile) return failure('WORKER_ERROR', 'Missing --profile path', args.url);
+  if (args.cdpUrl) {
+    const connected = await fetchViaCdp(args).catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!/ECONNREFUSED|connect|fetch failed|socket hang up/i.test(message)) throw error;
+      return undefined;
+    });
+    if (connected) return connected;
+  }
   const context = await chromium.launchPersistentContext(args.profile, {
     headless: true,
+    channel: args.browserChannel,
     viewport: { width: 1280, height: 900 },
   });
   try {
@@ -109,6 +130,22 @@ async function fetchQuota(args: Args): Promise<CodexStatus> {
     return parseQuotaText(text, { usagePageUrl: args.url });
   } finally {
     await context.close();
+  }
+}
+
+async function fetchViaCdp(args: Args): Promise<CodexStatus> {
+  if (!args.cdpUrl) return failure('WORKER_ERROR', 'Missing --cdp-url', args.url);
+  const browser = await chromium.connectOverCDP(args.cdpUrl, { timeout: 5000 });
+  try {
+    const context = browser.contexts()[0] ?? await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const page = context.pages()[0] ?? await context.newPage();
+    await page.goto(args.url ?? 'https://chatgpt.com/', { waitUntil: 'domcontentloaded', timeout: args.timeoutMs });
+    await page.waitForTimeout(3000);
+    const text = await page.locator('body').innerText({ timeout: 10000 });
+    if (looksLikeLoginRequired(text, page.url())) return loginRequired(text, page.url());
+    return parseQuotaText(text, { usagePageUrl: page.url() });
+  } finally {
+    await browser.close();
   }
 }
 

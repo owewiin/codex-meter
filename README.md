@@ -8,7 +8,7 @@ Implemented:
 
 - React/Tauri settings and status UI.
 - Shared quota status/config logic with tests.
-- Node + Playwright worker with fixture, login, and fetch modes.
+- Node + Playwright worker with fixture, login, and fetch modes against the Codex usage page.
 - Separate 5-hour and weekly quota bucket parsing when the usage page exposes both labels.
 - Local-cache-oriented Tauri backend shell.
 - Discord webhook send command in backend shell.
@@ -29,6 +29,7 @@ npm test -- --run
 npm run build
 npm run worker:fixture -- --text "Codex 72% remaining resets in 3h 12m ChatGPT Pro"
 npm run worker:fixture -- --text "Codex 5-hour limit 72% remaining resets in 3h 12m Weekly limit 41% remaining resets in 4d 6h ChatGPT Pro"
+cmd.exe /c "cd /d C:\Users\oweewiin\Desktop\codex-quota-tray && npm run worker:fetch:win"
 ```
 
 After installing Rust/Cargo and Tauri prerequisites on Windows or WSL:
@@ -46,21 +47,21 @@ sudo apt install libdbus-1-dev pkg-config
 npx playwright install-deps chromium
 ```
 
-## Playwright login/fetch concept
+## Manual Windows Chrome login/fetch concept
 
-The app uses an isolated persistent Playwright profile under app data:
+The app uses an isolated persistent Windows Chrome profile on the Desktop:
 
 ```text
-%APPDATA%\CodexMeter\playwright-profile\
+C:\Users\<you>\Desktop\codex-meter-manual-chrome-profile\
 ```
 
 Login flow:
 
 1. Start the Tauri app.
 2. Click `Login / Re-login`.
-3. A visible Playwright Chromium window opens.
+3. A visible Windows Chrome window opens with remote debugging on port `9223`.
 4. Sign in to ChatGPT/OpenAI manually.
-5. Run `Refresh Now`.
+5. Run `Refresh Now`; the worker reads `https://chatgpt.com/codex/settings/usage` from that isolated profile.
 
 The app does not store your OpenAI password and does not read your normal Chrome/Edge cookies.
 
