@@ -1,0 +1,21 @@
+node_modules/
+dist/
+.vite/
+src-tauri/target/
+*.log
+.env
+.env.*
+.DS_Store
+
+# Local app data / browser sessions
+CodexMeter/
+playwright-profile/
+status.json
+config.json
+history.jsonl
+logs/
+
+# Generated packages
+*.msi
+*.exe
+*.app
