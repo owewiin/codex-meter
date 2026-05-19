@@ -1,4 +1,6 @@
 import { chromium } from 'playwright';
+import { createInterface } from 'node:readline/promises';
+import { stdin as input, stdout as output } from 'node:process';
 import { parseQuotaText } from './parser';
 import type { CodexStatus } from '../src/shared/types';
 
@@ -66,23 +68,31 @@ async function login(args: Args): Promise<CodexStatus> {
     viewport: { width: 1280, height: 900 },
   });
   const page = context.pages()[0] ?? await context.newPage();
-  await page.goto(args.url ?? 'https://chatgpt.com/', { waitUntil: 'domcontentloaded', timeout: args.timeoutMs });
-  await page.waitForTimeout(5000);
-  const text = await page.locator('body').innerText({ timeout: 5000 }).catch(() => '');
-  const currentUrl = page.url();
-  await context.close();
-  const parsed = parseQuotaText(text, { usagePageUrl: args.url });
-  if (parsed.ok) return parsed;
-  if (looksLikeLoginRequired(text, currentUrl)) return loginRequired(text, args.url);
-  return {
-    ok: false,
-    source: 'chatgpt_web',
-    errorCode: 'LOGIN_REQUIRED',
-    error: 'Login window opened; quota text was not visible yet. Log in, then run refresh again.',
-    fetchedAt: new Date().toISOString(),
-    usagePageUrl: args.url,
-    rawText: parsed.rawText,
-  };
+  try {
+    await page.goto(args.url ?? 'https://chatgpt.com/', { waitUntil: 'domcontentloaded', timeout: args.timeoutMs });
+    output.write('\nChatGPT login window is open. Click Log in in the browser, finish login, then return here and press Enter.\n');
+    const rl = createInterface({ input, output });
+    await rl.question('Press Enter after ChatGPT login is complete... ');
+    rl.close();
+    await page.waitForLoadState('domcontentloaded', { timeout: 10000 }).catch(() => undefined);
+    await page.waitForTimeout(1000);
+    const text = await page.locator('body').innerText({ timeout: 10000 }).catch(() => '');
+    const currentUrl = page.url();
+    const parsed = parseQuotaText(text, { usagePageUrl: currentUrl });
+    if (parsed.ok) return parsed;
+    if (looksLikeLoginRequired(text, currentUrl)) return loginRequired(text, currentUrl);
+    return {
+      ok: false,
+      source: 'chatgpt_web',
+      errorCode: 'LOGIN_REQUIRED',
+      error: 'Login window was opened, but quota text was not visible after Enter. If login finished, run refresh again; otherwise complete login first.',
+      fetchedAt: new Date().toISOString(),
+      usagePageUrl: currentUrl,
+      rawText: parsed.rawText,
+    };
+  } finally {
+    await context.close();
+  }
 }
 
 async function fetchQuota(args: Args): Promise<CodexStatus> {
