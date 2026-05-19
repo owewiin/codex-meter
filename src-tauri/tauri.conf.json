@@ -28,6 +28,13 @@
     "targets": "all",
     "category": "DeveloperTool",
     "shortDescription": "Codex quota tray monitor",
-    "longDescription": "Windows tray monitor for ChatGPT/OpenAI Codex quota using a Playwright persistent profile."
+    "longDescription": "Windows tray monitor for ChatGPT/OpenAI Codex quota using a Playwright persistent profile.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.png",
+      "icons/icon.ico"
+    ]
   }
 }
