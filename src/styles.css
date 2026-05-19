@@ -22,6 +22,11 @@ button:disabled { background: #536078; cursor: not-allowed; }
 .meter { width: 128px; height: 128px; border-radius: 32px; display: grid; place-items: center; align-content: center; border: 1px solid rgba(255,255,255,.16); }
 .meter span { font-size: 38px; font-weight: 800; }
 .meter small { color: rgba(255,255,255,.72); }
+.bucket-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
+.bucket { display: grid; gap: 6px; padding: 14px; border: 1px solid rgba(255,255,255,.12); border-radius: 16px; background: rgba(0,0,0,.18); }
+.bucket strong { color: #d7e6ff; text-transform: uppercase; letter-spacing: .08em; font-size: 12px; }
+.bucket span { font-size: 30px; font-weight: 800; }
+.bucket small { color: #9fb0c7; }
 .green { background: linear-gradient(145deg, #079669, #064e3b); }
 .yellow { background: linear-gradient(145deg, #d97706, #78350f); }
 .red { background: linear-gradient(145deg, #dc2626, #7f1d1d); }

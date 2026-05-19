@@ -33,6 +33,16 @@ struct CodexMeterConfig {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
+struct CodexQuotaBucket {
+    id: String,
+    label: String,
+    remaining_text: String,
+    remaining_percent: u8,
+    reset_text: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 struct CodexStatus {
     ok: bool,
     source: String,
@@ -40,6 +50,7 @@ struct CodexStatus {
     remaining_percent: Option<u8>,
     reset_text: Option<String>,
     plan_text: Option<String>,
+    buckets: Option<Vec<CodexQuotaBucket>>,
     error_code: Option<String>,
     error: Option<String>,
     fetched_at: String,
@@ -87,6 +98,7 @@ fn default_status() -> CodexStatus {
         remaining_percent: None,
         reset_text: None,
         plan_text: None,
+        buckets: None,
         error_code: Some("LOGIN_REQUIRED".to_string()),
         error: Some("No cached status yet. Use Login / Re-login, then Refresh Now.".to_string()),
         fetched_at: Utc::now().to_rfc3339(),
@@ -180,6 +192,7 @@ fn refresh_now(config: CodexMeterConfig) -> Result<CodexStatus, String> {
         remaining_percent: None,
         reset_text: None,
         plan_text: None,
+        buckets: None,
         error_code: Some("WORKER_ERROR".to_string()),
         error: Some(err),
         fetched_at: Utc::now().to_rfc3339(),
@@ -199,6 +212,7 @@ fn login(config: CodexMeterConfig) -> Result<CodexStatus, String> {
         remaining_percent: None,
         reset_text: None,
         plan_text: None,
+        buckets: None,
         error_code: Some("WORKER_ERROR".to_string()),
         error: Some(err),
         fetched_at: Utc::now().to_rfc3339(),
@@ -218,12 +232,31 @@ async fn send_status_to_discord(status: CodexStatus, config: CodexMeterConfig, m
         return Err("Discord webhook URL is empty".to_string());
     }
     let content = if status.ok {
-        format!(
-            "Codex 額度狀態\n\n剩餘：{}%\n重置：{}\n最後更新：{}",
-            status.remaining_percent.unwrap_or(0),
-            status.reset_text.unwrap_or_else(|| "圖中未顯示".to_string()),
-            status.fetched_at
-        )
+        let bucket_lines = status
+            .buckets
+            .clone()
+            .unwrap_or_default()
+            .iter()
+            .map(|bucket| {
+                format!(
+                    "{}：{}%（{}）",
+                    bucket.label,
+                    bucket.remaining_percent,
+                    bucket.reset_text.clone().unwrap_or_else(|| "未顯示重置時間".to_string())
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        let detail = if bucket_lines.is_empty() {
+            format!(
+                "剩餘：{}%\n重置：{}",
+                status.remaining_percent.unwrap_or(0),
+                status.reset_text.clone().unwrap_or_else(|| "圖中未顯示".to_string())
+            )
+        } else {
+            format!("{}\n主要告警值：{}%", bucket_lines, status.remaining_percent.unwrap_or(0))
+        };
+        format!("Codex 額度狀態\n\n{}\n最後更新：{}", detail, status.fetched_at)
     } else {
         format!(
             "Codex 額度查詢失敗\n\n原因：{}\n最後嘗試：{}",

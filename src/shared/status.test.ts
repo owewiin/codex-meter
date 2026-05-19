@@ -12,6 +12,19 @@ const ok = (percent: number): CodexStatus => ({
   fetchedAt: '2026-05-19T10:00:00+08:00',
 });
 
+const bucketed: CodexStatus = {
+  ok: true,
+  source: 'fixture',
+  remainingText: '18% remaining',
+  remainingPercent: 18,
+  resetText: 'reset in 2d',
+  fetchedAt: '2026-05-19T10:00:00+08:00',
+  buckets: [
+    { id: 'five_hour', label: '5-hour', remainingText: '72% remaining', remainingPercent: 72, resetText: 'reset in 3h' },
+    { id: 'weekly', label: 'weekly', remainingText: '18% remaining', remainingPercent: 18, resetText: 'reset in 2d' },
+  ],
+};
+
 const fail: CodexStatus = {
   ok: false,
   source: 'fixture',
@@ -42,6 +55,13 @@ describe('status formatting', () => {
 
   it('formats successful tooltip', () => {
     expect(formatStatusTooltip(ok(72), new Date('2026-05-19T10:10:00+08:00'))).toContain('Codex: 72% remaining');
+  });
+
+  it('formats separate quota buckets in the tooltip', () => {
+    const tooltip = formatStatusTooltip(bucketed, new Date('2026-05-19T10:10:00+08:00'));
+    expect(tooltip).toContain('5-hour: 72% remaining / Reset: reset in 3h');
+    expect(tooltip).toContain('weekly: 18% remaining / Reset: reset in 2d');
+    expect(tooltip).toContain('Primary: 18% remaining');
   });
 
   it('formats failed tooltip', () => {

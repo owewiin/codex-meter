@@ -14,9 +14,18 @@ export function isStale(status: CodexStatus, now = new Date(), maxAgeMinutes = 3
 
 export function quotaColor(status: CodexStatus, threshold = 20): 'green' | 'yellow' | 'red' | 'gray' {
   if (!status.ok) return 'gray';
-  if (status.remainingPercent < threshold) return 'red';
-  if (status.remainingPercent <= 50) return 'yellow';
+  const percent = status.remainingPercent;
+  if (percent < threshold) return 'red';
+  if (percent <= 50) return 'yellow';
   return 'green';
+}
+
+function bucketLines(status: CodexStatus): string[] {
+  if (!status.ok || !status.buckets?.length) return [];
+  return status.buckets.map((bucket) => {
+    const reset = bucket.resetText ? ` / Reset: ${bucket.resetText}` : '';
+    return `${bucket.label}: ${bucket.remainingText}${reset}`;
+  });
 }
 
 export function formatStatusTooltip(status: CodexStatus, now = new Date()): string {
@@ -24,6 +33,10 @@ export function formatStatusTooltip(status: CodexStatus, now = new Date()): stri
   const updated = formatLocalTime(status.fetchedAt);
   if (!status.ok) {
     return `Codex: ${status.error}${staleSuffix}\nUpdated: ${updated}`;
+  }
+  const buckets = bucketLines(status);
+  if (buckets.length > 0) {
+    return `Codex buckets${staleSuffix}\n${buckets.join('\n')}\nPrimary: ${status.remainingText}\nUpdated: ${updated}`;
   }
   const reset = status.resetText ? `\nReset: ${status.resetText}` : '';
   return `Codex: ${status.remainingText}${staleSuffix}${reset}\nUpdated: ${updated}`;
@@ -54,6 +67,10 @@ export function shouldNotify(
 
 export function humanSummary(status: CodexStatus): string {
   if (!status.ok) return `查詢失敗：${status.error}`;
+  if (status.buckets?.length) {
+    const buckets = status.buckets.map((bucket) => `${bucket.label} ${bucket.remainingPercent}%`).join('，');
+    return `Codex 額度：${buckets}；主要告警值 ${status.remainingPercent}%，最後更新：${formatLocalTime(status.fetchedAt)}`;
+  }
   const reset = status.resetText ? `，重置：${status.resetText}` : '';
   return `Codex 剩餘：${status.remainingPercent}%${reset}，最後更新：${formatLocalTime(status.fetchedAt)}`;
 }

@@ -18,6 +18,7 @@ npx playwright install chromium
 npm test -- --run
 npm run build
 npm run worker:fixture -- --text "Codex 72% remaining resets in 3h 12m ChatGPT Pro"
+npm run worker:fixture -- --text "Codex 5-hour limit 72% remaining resets in 3h 12m Weekly limit 41% remaining resets in 4d 6h ChatGPT Pro"
 ```
 
 Expected fixture output:
@@ -31,6 +32,22 @@ Expected fixture output:
   "planText": "ChatGPT Pro"
 }
 ```
+
+Expected multi-bucket fixture behavior:
+
+```json
+{
+  "ok": true,
+  "remainingPercent": 41,
+  "resetText": "resets in 4d 6h",
+  "buckets": [
+    { "id": "five_hour", "label": "5-hour", "remainingPercent": 72 },
+    { "id": "weekly", "label": "weekly", "remainingPercent": 41 }
+  ]
+}
+```
+
+When both 5-hour and weekly buckets are visible, the top-level `remainingPercent` is the lowest parsed bucket so tray color and Discord low-quota alerts stay conservative.
 
 ## Run the Tauri app
 

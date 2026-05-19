@@ -32,4 +32,43 @@ describe('parseQuotaText', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.errorCode).toBe('PARSER_NO_MATCH');
   });
+
+  it('parses separate 5-hour and weekly quota buckets', () => {
+    const result = parseQuotaText(
+      'Codex 5-hour limit 72% remaining resets in 3h 12m Weekly limit 41% remaining resets in 4d 6h ChatGPT Pro',
+      { source: 'fixture', fetchedAt: '2026-05-19T10:00:00+08:00' },
+    );
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.buckets).toEqual([
+        {
+          id: 'five_hour',
+          label: '5-hour',
+          remainingText: '72% remaining',
+          remainingPercent: 72,
+          resetText: 'resets in 3h 12m',
+        },
+        {
+          id: 'weekly',
+          label: 'weekly',
+          remainingText: '41% remaining',
+          remainingPercent: 41,
+          resetText: 'resets in 4d 6h',
+        },
+      ]);
+      expect(result.remainingPercent).toBe(41);
+      expect(result.resetText).toBe('resets in 4d 6h');
+    }
+  });
+
+  it('uses the lowest parsed bucket for the top-level remaining percent', () => {
+    const result = parseQuotaText('Codex 5h 72% remaining reset in 3h weekly 18% remaining reset in 2d', { source: 'fixture' });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.remainingPercent).toBe(18);
+      expect(result.buckets?.map((bucket) => bucket.id)).toEqual(['five_hour', 'weekly']);
+    }
+  });
 });

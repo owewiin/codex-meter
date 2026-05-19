@@ -21,6 +21,16 @@ export interface CodexMeterConfig {
   notifications: NotificationConfig;
 }
 
+export type CodexQuotaBucketId = 'five_hour' | 'weekly' | 'unknown';
+
+export interface CodexQuotaBucket {
+  id: CodexQuotaBucketId;
+  label: string;
+  remainingText: string;
+  remainingPercent: number;
+  resetText?: string;
+}
+
 export interface SuccessfulCodexStatus {
   ok: true;
   source: 'chatgpt_web' | 'fixture';
@@ -28,6 +38,7 @@ export interface SuccessfulCodexStatus {
   remainingPercent: number;
   resetText?: string;
   planText?: string;
+  buckets?: CodexQuotaBucket[];
   fetchedAt: string;
   usagePageUrl?: string;
   rawText?: string;

@@ -9,6 +9,7 @@ Implemented:
 - React/Tauri settings and status UI.
 - Shared quota status/config logic with tests.
 - Node + Playwright worker with fixture, login, and fetch modes.
+- Separate 5-hour and weekly quota bucket parsing when the usage page exposes both labels.
 - Local-cache-oriented Tauri backend shell.
 - Discord webhook send command in backend shell.
 
@@ -24,6 +25,7 @@ npm install
 npm test -- --run
 npm run build
 npm run worker:fixture -- --text "Codex 72% remaining resets in 3h 12m ChatGPT Pro"
+npm run worker:fixture -- --text "Codex 5-hour limit 72% remaining resets in 3h 12m Weekly limit 41% remaining resets in 4d 6h ChatGPT Pro"
 ```
 
 After installing Rust/Cargo and Tauri prerequisites on Windows or WSL:

@@ -7,10 +7,14 @@ import type { CodexMeterConfig, CodexStatus } from './shared/types';
 const mockStatus: CodexStatus = {
   ok: true,
   source: 'fixture',
-  remainingText: '72% remaining',
-  remainingPercent: 72,
-  resetText: 'resets in 3h 12m',
+  remainingText: '41% remaining',
+  remainingPercent: 41,
+  resetText: 'resets in 4d 6h',
   planText: 'ChatGPT Pro',
+  buckets: [
+    { id: 'five_hour', label: '5-hour', remainingText: '72% remaining', remainingPercent: 72, resetText: 'resets in 3h 12m' },
+    { id: 'weekly', label: 'weekly', remainingText: '41% remaining', remainingPercent: 41, resetText: 'resets in 4d 6h' },
+  ],
   fetchedAt: new Date().toISOString(),
   usagePageUrl: DEFAULT_CONFIG.usagePageUrl,
 };
@@ -90,6 +94,17 @@ export default function App() {
 
       <section className="card">
         <h2>目前狀態</h2>
+        {status.ok && status.buckets?.length ? (
+          <div className="bucket-grid">
+            {status.buckets.map((bucket) => (
+              <article className="bucket" key={bucket.id}>
+                <strong>{bucket.label}</strong>
+                <span>{bucket.remainingPercent}%</span>
+                <small>{bucket.resetText ?? 'reset time not visible'}</small>
+              </article>
+            ))}
+          </div>
+        ) : null}
         <pre>{tooltip}</pre>
         <div className="actions">
           <button disabled={busy} onClick={refreshNow}>Refresh Now</button>
