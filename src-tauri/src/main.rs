@@ -2,6 +2,8 @@
 
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::{env, fs, path::PathBuf, process::Command, thread};
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
@@ -210,6 +212,16 @@ fn repo_root_from_tauri() -> Result<PathBuf, String> {
 }
 
 const CHROME_DEBUG_PORT: u16 = 9223;
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+#[cfg(windows)]
+fn hide_console_window(command: &mut Command) {
+    command.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(windows))]
+fn hide_console_window(_command: &mut Command) {}
 
 fn manual_chrome_profile() -> Result<PathBuf, String> {
     env::var_os("USERPROFILE")
@@ -280,7 +292,9 @@ fn run_worker(mode: &str, config: &CodexMeterConfig) -> Result<CodexStatus, Stri
     fs::create_dir_all(&profile).map_err(|err| err.to_string())?;
     let root = repo_root_from_tauri()?;
     let cdp_url = format!("http://127.0.0.1:{CHROME_DEBUG_PORT}");
-    let output = Command::new(npx_executable())
+    let mut command = Command::new(npx_executable());
+    hide_console_window(&mut command);
+    let output = command
         .current_dir(root)
         .arg("tsx")
         .arg("worker/fetch-codex-quota.ts")
