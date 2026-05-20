@@ -1,124 +1,211 @@
 # Codex Meter Usage Guide
 
-## Install dependencies
+Codex Meter is a Windows tray monitor for ChatGPT/OpenAI Codex quota. It opens the Codex usage page through an isolated Chrome profile, parses the visible quota text, stores the latest status locally, and can optionally send the status to Discord.
 
-```bash
-npm install
-```
+For setup, see [`docs/install.md`](./install.md).
 
-Install Playwright browser binaries when ready to test real login/fetch:
-
-```bash
-npx playwright install chromium
-```
-
-On Ubuntu/WSL, Playwright also needs system browser libraries. If Chromium fails with missing `.so` files such as `libnspr4.so`, install deps:
-
-```bash
-npx playwright install-deps chromium
-```
-
-## Verify non-native pieces
-
-```bash
-npm test -- --run
-npm run build
-npm run worker:fixture -- --text "Codex 72% remaining resets in 3h 12m ChatGPT Pro"
-npm run worker:fixture -- --text "Codex 5-hour limit 72% remaining resets in 3h 12m Weekly limit 41% remaining resets in 4d 6h ChatGPT Pro"
-cmd.exe /c "cd /d C:\Users\oweewiin\Desktop\codex-quota-tray && npm run worker:fetch:win"
-```
-
-Expected fixture output:
-
-```json
-{
-  "ok": true,
-  "source": "fixture",
-  "remainingPercent": 72,
-  "resetText": "resets in 3h 12m",
-  "planText": "ChatGPT Pro"
-}
-```
-
-Expected multi-bucket fixture behavior:
-
-```json
-{
-  "ok": true,
-  "remainingPercent": 41,
-  "resetText": "resets in 4d 6h",
-  "buckets": [
-    { "id": "five_hour", "label": "5-hour", "remainingPercent": 72 },
-    { "id": "weekly", "label": "weekly", "remainingPercent": 41 }
-  ]
-}
-```
-
-When both 5-hour and weekly buckets are visible, the top-level `remainingPercent` is the lowest parsed bucket so tray color and Discord low-quota alerts stay conservative.
-
-## Run the Tauri app
-
-Tauri native run requires Rust/Cargo and platform prerequisites.
-
-```bash
-. "$HOME/.cargo/env"
-cargo --version
-npm run tauri:dev
-```
-
-On Windows PowerShell:
+## Quick start
 
 ```powershell
-cd C:\Users\oweewiin\Desktop\codex-quota-tray
-$env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
+git clone https://github.com/owewiin/codex-meter.git
+cd codex-meter
+npm install
 npm run tauri:dev
 ```
 
-The app creates a Windows system-tray icon. Closing the main window hides it; it keeps running until you select `Quit` from the tray menu. Right-click the tray icon for `Open Codex Meter`, `Hide Window`, `Refresh Now`, `Login / Re-login`, and `Quit`. Hovering the icon shows the latest parsed quota tooltip.
+First run:
 
-On Ubuntu/WSL, Tauri build dependencies include DBus/WebKitGTK development libraries. At minimum, install the missing package reported by Cargo, for example:
+1. Click `Login / Re-login` in the app or tray menu.
+2. A visible Windows Chrome window opens.
+3. Sign in to ChatGPT/OpenAI manually.
+4. Click `Refresh Now`.
+5. Check the app status card and tray tooltip.
 
-```bash
-sudo apt install libdbus-1-dev pkg-config
+## Tray behavior
+
+Codex Meter is designed to stay resident in the Windows system tray.
+
+- Closing the main window hides it instead of quitting.
+- Right-click the tray icon to open the menu.
+- Hover the tray icon to see the latest parsed quota tooltip.
+- Use `Quit` from the tray menu to fully exit.
+
+Tray menu actions:
+
+| Action | Purpose |
+| --- | --- |
+| `Open Codex Meter` | Show the main window. |
+| `Hide Window` | Hide the main window and keep the tray app running. |
+| `Refresh Now` | Fetch and parse the current Codex usage page. |
+| `Login / Re-login` | Open the isolated Chrome profile for manual sign-in. |
+| `Quit` | Exit the tray app. |
+
+## Login / re-login flow
+
+Codex Meter does not ask for or store your OpenAI password. Login is done manually in a dedicated Chrome profile.
+
+Profile path:
+
+```text
+%USERPROFILE%\Desktop\codex-meter-manual-chrome-profile\
 ```
 
-If `cargo: command not found`, install Rust first:
+Steps:
 
-```bash
-winget install Rustlang.Rustup
-```
-
-Then open a fresh terminal and verify:
-
-```bash
-rustc --version
-cargo --version
-```
-
-## Login flow
-
-1. Run the app with `npm run tauri:dev`.
+1. Start Codex Meter.
 2. Click `Login / Re-login`.
-3. Complete ChatGPT/OpenAI login in the isolated Windows Chrome window.
-4. Click `Refresh Now`; the default usage page is `https://chatgpt.com/codex/settings/usage`.
-5. Check the status panel and `%APPDATA%\CodexMeter\status.json`.
+3. Complete login in the Chrome window that opens.
+4. Leave that profile signed in.
+5. Return to Codex Meter and click `Refresh Now`.
 
-You can also use the tray menu `Refresh Now` without opening the main window. If the window is open, tray refresh results are pushed back into the UI.
+The default usage page is:
+
+```text
+https://chatgpt.com/codex/settings/usage
+```
+
+## Refreshing quota status
+
+Use one of these options:
+
+- Click `Refresh Now` in the main window.
+- Right-click the tray icon and choose `Refresh Now`.
+- Run the worker command manually during development.
+
+Manual Windows worker command:
+
+```powershell
+npm run worker:fetch:win
+```
+
+The worker connects to Chrome through the configured debugging port and returns JSON status.
+
+## Understanding quota output
+
+Codex Meter supports both simple and multi-bucket quota text.
+
+Single quota example:
+
+```text
+Codex 72% remaining resets in 3h 12m ChatGPT Pro
+```
+
+Multi-bucket example:
+
+```text
+Codex 5-hour limit 72% remaining resets in 3h 12m Weekly limit 41% remaining resets in 4d 6h ChatGPT Pro
+```
+
+When both 5-hour and weekly buckets are visible, the top-level `remainingPercent` uses the lowest parsed bucket. This keeps tray color/status and Discord warnings conservative.
+
+## Local status files
+
+Codex Meter writes the latest state under:
+
+```text
+%APPDATA%\CodexMeter\status.json
+%APPDATA%\CodexMeter\config.json
+%APPDATA%\CodexMeter\history.jsonl
+```
+
+Typical uses:
+
+- `status.json`: latest parsed quota snapshot.
+- `config.json`: local app settings, including Discord webhook settings if enabled.
+- `history.jsonl`: append-only local history for future trend inspection.
+
+These files are local-only and should not be committed.
 
 ## Discord webhook
+
+To send quota status to Discord manually:
 
 1. Create a Discord webhook for the target channel.
 2. Open Codex Meter settings.
 3. Enable Discord webhook.
 4. Paste the webhook URL.
 5. Save settings.
-6. Use `Send Status to Discord` for a manual test.
+6. Click `Send Status to Discord`.
 
-Webhook URL is stored only in local config and should not be committed.
+The webhook URL is stored only in local config.
+
+## Development commands
+
+Install dependencies:
+
+```powershell
+npm install
+npx playwright install chromium
+```
+
+Run tests and frontend build:
+
+```powershell
+npm test -- --run
+npm run build
+```
+
+Run parser fixtures:
+
+```powershell
+npm run worker:fixture -- --text "Codex 72% remaining resets in 3h 12m ChatGPT Pro"
+npm run worker:fixture -- --text "Codex 5-hour limit 72% remaining resets in 3h 12m Weekly limit 41% remaining resets in 4d 6h ChatGPT Pro"
+```
+
+Run the Tauri app:
+
+```powershell
+npm run tauri:dev
+```
+
+Build a release package:
+
+```powershell
+npm run tauri:build
+```
 
 ## Troubleshooting
 
-- `Quota percentage not found`: the ChatGPT/Codex page text changed or the usage page is not visible. Use Login / Re-login and capture the visible wording for parser update.
-- `Login required`: persistent profile is not logged in or the session expired.
-- `Worker produced no JSON`: Node/tsx/worker path failed from the Tauri backend.
-- Native build fails before compilation: ensure Rust/Cargo and Tauri prerequisites are installed.
+### `Quota percentage not found`
+
+The Codex usage page wording likely changed, or the page did not load the quota section. Re-login, refresh, and capture the visible usage text so the parser can be updated.
+
+### `Login required`
+
+The isolated Chrome profile is not signed in or the session expired. Use `Login / Re-login`, then refresh again.
+
+### `Worker produced no JSON`
+
+The Tauri backend could not run the Node/tsx worker or the worker crashed before writing JSON. Run the worker manually:
+
+```powershell
+npm run worker:fetch:win
+```
+
+### Chrome opens but refresh still fails
+
+Make sure the login window is using the isolated profile opened by Codex Meter, not your normal Chrome profile. Then complete login and try `Refresh Now` again.
+
+### `cargo: command not found`
+
+Install Rustup and reopen PowerShell:
+
+```powershell
+winget install Rustlang.Rustup
+```
+
+Or temporarily add Cargo to PATH:
+
+```powershell
+$env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
+```
+
+### WSL Playwright missing libraries
+
+Install Playwright browser dependencies inside WSL:
+
+```bash
+npx playwright install-deps chromium
+```
+
+For the actual Windows tray app, prefer running from Windows PowerShell.

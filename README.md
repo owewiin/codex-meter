@@ -2,6 +2,20 @@
 
 Windows tray app prototype for monitoring ChatGPT/OpenAI Codex quota without manually opening the usage page every time.
 
+## Documentation
+
+- [Installation guide](docs/install.md)
+- [Usage guide](docs/usage.md)
+
+Quick start on Windows PowerShell:
+
+```powershell
+git clone https://github.com/owewiin/codex-meter.git
+cd codex-meter
+npm install
+npm run tauri:dev
+```
+
 ## Current MVP status
 
 Implemented:
