@@ -2,6 +2,16 @@
 
 Windows tray app prototype for monitoring ChatGPT/OpenAI Codex quota without manually opening the usage page every time.
 
+## Privacy and security
+
+- No telemetry and no author-operated server are used.
+- ChatGPT/OpenAI login stays in an isolated local Chrome profile.
+- The app does not ask for or store your OpenAI password.
+- The app does not read your normal Chrome/Edge profile.
+- Discord webhook support is optional; the webhook URL is stored locally only.
+- Discord messages contain only quota status/failure summaries, not cookies or browser session data.
+- Runtime files and browser profiles should never be committed.
+
 ## Documentation
 
 - [Installation guide](docs/install.md)
@@ -28,12 +38,10 @@ Implemented:
 - Windows system tray icon with open/hide, refresh, login/re-login, tooltip status, and quit menu actions.
 - Discord webhook send command in backend shell.
 
-Important limitation in the current WSL environment:
+Important limitation in some WSL/Linux environments:
 
-- Node/npm are installed and verified.
-- Rust/Cargo are installed under the Hermes profile home; source `$HOME/.cargo/env` before native builds.
-- Native Tauri Linux builds still require system development libraries such as `libdbus-1-dev`/WebKitGTK. This WSL user cannot install them without sudo.
-- Playwright Chromium is installed, but this WSL image is missing Chromium runtime libraries such as `libnspr4`; install Playwright system deps before real browser fetches.
+- Native Tauri Linux builds may require system development libraries such as `libdbus-1-dev`/WebKitGTK.
+- Playwright Chromium may require additional runtime libraries; install Playwright system deps before real browser fetches.
 
 ## Development commands
 
@@ -44,7 +52,7 @@ npm test -- --run
 npm run build
 npm run worker:fixture -- --text "Codex 72% remaining resets in 3h 12m ChatGPT Pro"
 npm run worker:fixture -- --text "Codex 5-hour limit 72% remaining resets in 3h 12m Weekly limit 41% remaining resets in 4d 6h ChatGPT Pro"
-cmd.exe /c "cd /d C:\Users\oweewiin\Desktop\codex-quota-tray && npm run worker:fetch:win"
+npm run worker:fetch:win
 ```
 
 After installing Rust/Cargo and Tauri prerequisites on Windows or WSL:
@@ -58,7 +66,7 @@ npm run tauri:build
 On Windows PowerShell, run from the project directory:
 
 ```powershell
-cd C:\Users\oweewiin\Desktop\codex-quota-tray
+cd C:\path\to\codex-meter
 $env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
 npm run tauri:dev
 ```
@@ -100,4 +108,4 @@ Planned runtime cache path:
 %APPDATA%\CodexMeter\history.jsonl
 ```
 
-Hermes/Chani can read `status.json` later for Discord instant query replies.
+Other local automation tools can read `status.json` for local-only integrations.

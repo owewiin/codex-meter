@@ -185,7 +185,11 @@ fn update_tray_tooltip(app: &AppHandle, status: &CodexStatus) {
 
 fn write_status(status: &CodexStatus) -> Result<(), String> {
     let dir = app_dir()?;
-    let text = serde_json::to_string_pretty(status).map_err(|err| err.to_string())?;
+    let mut sanitized = status.clone();
+    // Avoid persisting raw page text by default. It is useful for parser debugging,
+    // but the local cache/history should remain safe to inspect and share.
+    sanitized.raw_text = None;
+    let text = serde_json::to_string_pretty(&sanitized).map_err(|err| err.to_string())?;
     fs::write(dir.join("status.json"), &text).map_err(|err| err.to_string())?;
     fs::OpenOptions::new()
         .create(true)
@@ -196,7 +200,7 @@ fn write_status(status: &CodexStatus) -> Result<(), String> {
             writeln!(
                 file,
                 "{}",
-                serde_json::to_string(status).unwrap_or_default()
+                serde_json::to_string(&sanitized).unwrap_or_default()
             )
         })
         .map_err(|err| err.to_string())?;
