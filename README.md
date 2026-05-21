@@ -7,6 +7,7 @@ Windows tray app prototype for monitoring ChatGPT/OpenAI Codex quota without man
 - No telemetry and no author-operated server are used.
 - ChatGPT/OpenAI login stays in an isolated local Chrome profile.
 - The app does not ask for or store your OpenAI password.
+- The isolated Chrome profile keeps the normal browser session/cookies locally, so you usually do not need to log in again after restarting the app or computer unless the session expires, you sign out, or the profile is deleted.
 - The app does not read your normal Chrome/Edge profile.
 - Discord webhook support is optional; the webhook URL is stored locally only.
 - Discord messages contain only quota status/failure summaries, not cookies or browser session data.
@@ -96,7 +97,7 @@ Login flow:
 4. Sign in to ChatGPT/OpenAI manually.
 5. Run `Refresh Now`; the worker reads `https://chatgpt.com/codex/settings/usage` from that isolated profile.
 
-The app does not store your OpenAI password and does not read your normal Chrome/Edge cookies.
+The app does not store your OpenAI password and does not read your normal Chrome/Edge cookies. The isolated Chrome profile keeps its own local session/cookies, so you usually do not need to sign in again after restarting the app or computer unless the session expires, you sign out, or the profile folder is deleted.
 
 ## Local cache
 
